@@ -10,6 +10,16 @@ aiqa 是一个一次性ai问答插件，用于在kovi中实现ai问答功能。
 
 系统里需要安装 chrome ? 暂不清楚，试着来吧。
 
+```
+sudo apt update && sudo apt install -y chromium
+```
+
+顺便安装一下字体
+
+```
+sudo apt install fonts-noto
+```
+
 ## 使用说明
 
 默认配置下：
