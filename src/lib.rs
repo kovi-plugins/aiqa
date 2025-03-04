@@ -334,6 +334,10 @@ fn image_to_base64(img: Vec<u8>) -> String {
 fn md_to_html(md: &str) -> String {
     let mut options = pulldown_cmark::Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
+    options.insert(Options::ENABLE_TABLES);
+    options.insert(Options::ENABLE_FOOTNOTES);
+    options.insert(Options::ENABLE_MATH);
+    options.insert(Options::ENABLE_GFM);
     let parser = pulldown_cmark::Parser::new_ext(md, options);
 
     let mut html_output = String::new();
