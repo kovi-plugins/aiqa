@@ -159,7 +159,7 @@ async fn main() {
         )
     });
 
-    P::cron("* 6,18 * * *", || cron()).unwrap();
+    P::cron("0 6,18 * * *", || cron()).unwrap();
 
     async fn cron() {
         let mut light = LIGHT.write();
