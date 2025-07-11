@@ -2,7 +2,11 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use config::Config;
 use error::ScreenshotError;
-use headless_chrome::{protocol::cdp::Page, types::Bounds, Browser};
+use headless_chrome::{
+    protocol::cdp::{Emulation, Page},
+    types::Bounds,
+    Browser,
+};
 use kovi::{
     bot::message::Segment,
     chrono::{self, Timelike as _},
@@ -83,6 +87,25 @@ impl ScreenshotManager {
             top: Some(0),
             width: Some(viewport.width),
             height: Some(viewport.height + 200.0),
+        })
+        .map_err(|err| ScreenshotError::TabOperateErr(err.to_string()))?;
+
+        // 设置设备像素比
+        tab.call_method(Emulation::SetDeviceMetricsOverride {
+            width: viewport.width as u32,
+            height: (viewport.height + 200.0) as u32,
+            device_scale_factor: 2.0,
+            mobile: false,
+            scale: None,
+            screen_width: None,
+            screen_height: None,
+            position_x: None,
+            position_y: None,
+            dont_set_visible_size: None,
+            screen_orientation: None,
+            viewport: None,
+            display_feature: None,
+            device_posture: None,
         })
         .map_err(|err| ScreenshotError::TabOperateErr(err.to_string()))?;
 
@@ -399,6 +422,7 @@ async fn init_server_type(bot: &RuntimeBot) {
 }
 
 #[test]
+#[ignore = "需要本地文件"]
 fn test_screenshot() -> Result<(), Box<dyn std::error::Error>> {
     use headless_chrome::{Browser, LaunchOptions};
 
@@ -417,6 +441,25 @@ fn test_screenshot() -> Result<(), Box<dyn std::error::Error>> {
         width: Some(viewport.width),
         height: Some(viewport.height + 200.0),
     })?;
+
+    // 设置设备像素比
+    tab.call_method(Emulation::SetDeviceMetricsOverride {
+        width: viewport.width as u32,
+        height: (viewport.height + 200.0) as u32,
+        device_scale_factor: 2.0,
+        mobile: false,
+        scale: None,
+        screen_width: None,
+        screen_height: None,
+        position_x: None,
+        position_y: None,
+        dont_set_visible_size: None,
+        screen_orientation: None,
+        viewport: None,
+        display_feature: None,
+        device_posture: None,
+    })
+    .map_err(|err| ScreenshotError::TabOperateErr(err.to_string()))?;
 
     let png_data = tab.capture_screenshot(
         Page::CaptureScreenshotFormatOption::Png,
