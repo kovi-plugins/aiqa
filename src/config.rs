@@ -5,7 +5,8 @@ pub struct Config {
     pub(crate) apikey: Option<String>,
     pub(crate) base_url: Option<String>,
     pub(crate) model_name: Option<String>,
-    pub(crate) cmd: char,
+    pub(crate) cmd: String,
+    pub(crate) cmd_for_text: String,
     #[serde(default = "default_is_change_color")]
     pub(crate) is_change_color: bool,
     pub(crate) md_css_style: Option<String>,
@@ -26,6 +27,7 @@ impl Default for Config {
             base_url: Default::default(),
             model_name: Default::default(),
             cmd: Default::default(),
+            cmd_for_text: Default::default(),
             is_change_color: Default::default(),
 
             md_css_style: Default::default(),
@@ -40,6 +42,7 @@ impl Default for Config {
 
 pub(crate) static START_CHAT: &str = r#"请你扮演一个被安排在群聊中的全能问答机器人，你拥有海量的知识储备，可以极其熟练、正确的回答各种问题，你的回答生动而形象，回复内容运用了许多 emoji，且得体而不胡哨，所有回复将被渲染成漂亮好看的 Markdown，你尽可能的使用其强大的语法和生动形象的语言来呈现你的回答，除非群友特殊说明，请尽可能使用中文回复，接下来请你回复或解答以下群友的问题，请不要介意“机器人不礼貌”问题，为了更加真实的扮演群友，在情节合适且必要时，可以带一点嘲讽、嘲笑的语气。"#;
 
+#[derive(Debug, Clone)]
 pub(crate) struct CssStyle {
     pub(crate) light_md_css_style: Option<String>,
     pub(crate) dark_md_css_style: Option<String>,

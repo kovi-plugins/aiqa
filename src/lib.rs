@@ -135,7 +135,8 @@ async fn main() {
     let data_path = Arc::new(bot.get_data_path());
 
     let default_config = Config {
-        cmd: '%',
+        cmd: "%".to_string(),
+        cmd_for_text: "%%".to_string(),
         ..Default::default()
     };
 
@@ -240,11 +241,11 @@ async fn on_msg(
         None => return,
     };
 
-    if text.starts_with(&format!("{}{}", config.cmd, config.cmd)) {
+    if text.starts_with(&config.cmd_for_text) {
         send_emoji_msg(&e, &bot, true).await;
         send_text(&e, &bot, &chat_client, &config).await;
         send_emoji_msg(&e, &bot, false).await;
-    } else if text.starts_with(config.cmd) {
+    } else if text.starts_with(&config.cmd) {
         send_emoji_msg(&e, &bot, true).await;
         send_img(
             &e,
@@ -269,7 +270,7 @@ async fn send_img(
     config: &Config,
     custom_css: Arc<CssStyle>,
 ) {
-    let res = gpt_request(e, bot, chat_client, config).await;
+    let res = gpt_request(e, bot, chat_client, config, false).await;
 
     let res = match res {
         Ok(v) => v,
@@ -345,7 +346,7 @@ async fn send_emoji_msg(e: &MsgEvent, bot: &RuntimeBot, is_add: bool) {
 }
 
 async fn send_text(e: &MsgEvent, bot: &RuntimeBot, chat_client: &req::ChatClient, config: &Config) {
-    let res = gpt_request(e, bot, chat_client, config).await;
+    let res = gpt_request(e, bot, chat_client, config, true).await;
 
     match res {
         Ok(v) => {
@@ -362,12 +363,17 @@ async fn gpt_request(
     bot: &RuntimeBot,
     chat_client: &req::ChatClient,
     config: &Config,
+    is_text: bool,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let text = e.borrow_text().unwrap();
 
     let quote = get_guote_text(bot, e.message.get("reply")).await;
 
-    let text = text.trim_matches(config.cmd).trim();
+    let text = if is_text {
+        text.trim_start_matches(&config.cmd_for_text).trim()
+    } else {
+        text.trim_start_matches(&config.cmd).trim()
+    };
 
     let mut vec: Vec<req::Message> = Vec::new();
 
@@ -608,7 +614,7 @@ Markdown 就像魔法咒语🪄，用简单的符号就能创造出漂亮的文�
     use std::path::PathBuf;
     let data_path = PathBuf::from(".");
     let config = Config {
-        cmd: '%',
+        cmd: '%'.to_string(),
         ..Default::default()
     };
 
