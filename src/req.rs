@@ -1,14 +1,11 @@
 use crate::*;
-use async_openai::{
-    config::OpenAIConfig,
-    types::{
-        ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestSystemMessageArgs,
-        ChatCompletionRequestUserMessageArgs, ChatCompletionResponseMessage,
-        CreateChatCompletionRequestArgs, ResponseFormat,
-    },
-    Client,
+use async_openai::config::OpenAIConfig;
+use async_openai::types::{
+    ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestSystemMessageArgs,
+    ChatCompletionRequestUserMessageArgs, ChatCompletionResponseMessage,
+    CreateChatCompletionRequestArgs, ResponseFormat,
 };
-use config::START_CHAT;
+use async_openai::Client;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 
@@ -55,12 +52,13 @@ impl ChatClient {
     pub async fn request_chat_completion(
         &self,
         msgs: Vec<Message>,
+        system_prompt: &str,
     ) -> Result<ChatCompletionResponseMessage, Box<dyn Error>> {
         let mut send_msgs = Vec::with_capacity(msgs.len() + 1);
 
         send_msgs.push(
             ChatCompletionRequestSystemMessageArgs::default()
-                .content(START_CHAT)
+                .content(system_prompt)
                 .build()
                 .unwrap()
                 .into(),

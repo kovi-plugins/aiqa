@@ -89,8 +89,8 @@ impl ScreenshotManager {
 
         // 设置设备像素比
         tab.call_method(Emulation::SetDeviceMetricsOverride {
-            width: viewport.width as u32,
-            height: (viewport.height + 200.0) as u32,
+            width: (viewport.width + 300.0) as u32,
+            height: (viewport.height + 300.0) as u32,
             device_scale_factor: 2.0,
             mobile: false,
             scale: None,
@@ -133,11 +133,8 @@ async fn main() {
     let data_path = Arc::new(bot.get_data_path());
 
     let default_config = Config {
-        apikey: None,
-        base_url: None,
-        model_name: None,
         cmd: '%',
-        md_css_style: None,
+        ..Default::default()
     };
 
     let config: Arc<Config> =
@@ -355,7 +352,9 @@ async fn gpt_request(
 
     vec.push(req::Message::new_with_user(text.to_string()));
 
-    let res = chat_client.request_chat_completion(vec).await?;
+    let res = chat_client
+        .request_chat_completion(vec, &config.prompt)
+        .await?;
 
     res.content.ok_or("no content".into())
 }
@@ -382,13 +381,13 @@ fn image_to_base64(img: Vec<u8>) -> String {
 fn md_to_html(md: &str, custom_css: Option<&str>, config: &Config) -> String {
     let time = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let logo_str = format!(
-        "\n---\n<div style=\"opacity: 0.6; font-size: 0.8em; font-style: italic;\">由 kovi-plugin-aiqa 于 {} 生成, 模型是 {}</div>",
+        "\n---\n<div style=\"opacity: 0.6; font-size: 0.8em; font-style: italic; margin: 0; padding: 0; \"><p>由 kovi-plugin-aiqa 于 {} 生成, 模型是 {}</p></div>",
         time,
         config
             .model_name
             .as_ref()
             .map(|name| name.as_str())
-            .unwrap_or("不知道模型是什么")
+            .unwrap_or("未知")
     );
     let md = md.to_string() + &logo_str;
 
@@ -571,11 +570,8 @@ Markdown 就像魔法咒语🪄，用简单的符号就能创造出漂亮的文�
     use std::path::PathBuf;
     let data_path = PathBuf::from(".");
     let config = Config {
-        apikey: None,
-        base_url: None,
-        model_name: None,
         cmd: '%',
-        md_css_style: Some("air.css".to_string()),
+        ..Default::default()
     };
 
     let data_path = data_path.join("ysj copy.css");
