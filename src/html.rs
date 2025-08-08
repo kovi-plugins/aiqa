@@ -21,6 +21,7 @@ body{
     margin: 0;
     padding: 0;
     overflow: hidden;
+    max-width: 720px;
 }
 </style>
 <style>
