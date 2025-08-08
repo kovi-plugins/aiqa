@@ -64,11 +64,11 @@ impl ScreenshotManager {
         ))
         .map_err(|err| ScreenshotError::InvalidFilePath(err.to_string()))?;
 
-        tab.wait_for_element("div.finish")
+        tab.wait_for_element("article.markdown-body")
             .map_err(|err| ScreenshotError::TabOperateErr(err.to_string()))?;
 
         let viewport = tab
-            .wait_for_element("article.markdown-body")
+            .wait_for_element("body")
             .map_err(|err| ScreenshotError::TabOperateErr(err.to_string()))?
             .get_box_model()
             .map_err(|err| ScreenshotError::TabOperateErr(err.to_string()))?
