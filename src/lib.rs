@@ -387,22 +387,22 @@ fn md_to_html(md: &str, custom_css: Option<&str>) -> String {
 
     let mut html_output = String::new();
     html_output.push_str(html::HTML_START_NEXT_IS_MD_CSS);
-    if *LIGHT.read() {
-        html_output.push_str(html::GITHUB_MARKDOWN_LIGHT_NEXT_IS_HTML2);
-    } else {
-        html_output.push_str(html::GITHUB_MARKDOWN_DARK_NEXT_IS_HTML2);
-    }
-    html_output.push_str(html::HTML_2_NEXT_IS_HIGHLIGHT_CSS);
-
     if let Some(custom_css) = custom_css {
         html_output.push_str(custom_css);
     } else {
-        // Use default CSS
         if *LIGHT.read() {
-            html_output.push_str(html::HIGH_LIGHT_LIGHT_CSS_NEXT_IS_HTML3);
+            html_output.push_str(html::GITHUB_MARKDOWN_LIGHT_NEXT_IS_HTML2);
         } else {
-            html_output.push_str(html::HIGH_LIGHT_DARK_CSS_NEXT_IS_HTML3);
+            html_output.push_str(html::GITHUB_MARKDOWN_DARK_NEXT_IS_HTML2);
         }
+    }
+    html_output.push_str(html::HTML_2_NEXT_IS_HIGHLIGHT_CSS);
+
+    // Use default CSS
+    if *LIGHT.read() {
+        html_output.push_str(html::HIGH_LIGHT_LIGHT_CSS_NEXT_IS_HTML3);
+    } else {
+        html_output.push_str(html::HIGH_LIGHT_DARK_CSS_NEXT_IS_HTML3);
     }
 
     html_output.push_str(html::HTML_3_NEXT_IS_MD_BODY_AND_THEN_IS_HTML4);
@@ -505,22 +505,90 @@ fn test_screenshot() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 #[ignore = "需要本地文件"]
 fn test_md_to_html() {
-    let md = r#"# 你好呀!
+    let md = r#"啊哈～终于有人让我展示一下 Markdown 能力了，憋了这么久，终于能秀一波操作了😎
 
-```javascript
-var s = "JavaScript syntax highlighting";
-alert(s);
-```
+---
+
+## 🌈 今天我来带你看看 Markdown 的魔法世界！
+
+Markdown 就像一把瑞士军刀🔪，简洁、强大、灵活，写文档、写博客、写笔记，无所不能！
+
+---
+
+### 🧮 示例一：标题、段落与强调
+
+# 一级标题
+## 二级标题
+### 三级标题
+
+这是一个普通的段落。**加粗文字**，*斜体文字*，~~删除线文字~~。
+
+---
+
+### 📋 示例二：列表
+
+#### 无序列表
+- 苹果 🍎
+- 香蕉 🍌
+- 橙子 🍊
+
+#### 有序列表
+1. 打开电脑 💻
+2. 打开编辑器 📝
+3. 开始写 Markdown ✨
+
+---
+
+### 📊 示例三：表格
+
+| 姓名     | 年龄 | 性别 |
+|----------|------|------|
+| 张三     | 25   | 男   |
+| 李四     | 28   | 女   |
+| 王五     | 30   | 男   |
+
+---
+
+### 🔗 示例四：链接与图片
+
+[点击这里访问百度](https://www.baidu.com)
+
+![可爱猫咪](https://picsum.photos/200/300)
+
+---
+
+### 🧩 示例五：代码块
 
 ```python
-s = "Python syntax highlighting"
-print(s)
+def hello():
+print("Hello, Markdown!")
 ```
 
+```js
+console.log("前端之光！");
 ```
-No language indicated, so no syntax highlighting.
-But let's throw in a <b>tag</b>.
-```
+
+---
+
+### 🧱 示例六：引用与分割线
+
+> Markdown 是写作者的利器，程序员的助手，懒人的福音。
+
+---
+
+### 🧪 示例七：任务列表
+
+- [x] 写完作业 ✅
+- [ ] 打扫房间 🧹
+- [ ] 健身锻炼 🏋️‍♂️
+
+---
+
+### 🧠 总结一下：
+
+Markdown 就像魔法咒语🪄，用简单的符号就能创造出漂亮的文档。学会了它，你就是文档世界的魔法师🧙‍♂️！
+
+如果你还想看什么骚操作，尽管来问我！别光让我展示，得实战起来才有趣～💪
 
 已知过点$A(-1, 0)$ 、 $B(1, 0)$两点的动抛物线的准线始终与圆$x^2 + y^2 = 9$相切，该抛物线焦点$P$的轨迹是某圆锥曲线$E$的一部分。<br>(1)求曲线$E$的标准方程；<br>(2)已知点$C(-3, 0)$ ， $D(2, 0)$ ，过点$D$的动直线与曲线$E$相交于$M$ 、 $N$ ，设$\triangle CMN$的外心为$Q$ ， $O$为坐标原点，问：直线$OQ$与直线$MN$的斜率之积是否为定值，如果为定值，求出该定值；如果不是定值，则说明理由。
 "#;
@@ -535,7 +603,7 @@ But let's throw in a <b>tag</b>.
     //     md_css_style: Some("air.css".to_string()),
     // };
 
-    let data_path = data_path.join("air.css");
+    let data_path = data_path.join("ysj copy.css");
     let css = std::fs::read_to_string(data_path).unwrap();
 
     let res = md_to_html(md, Some(css.as_str()));
