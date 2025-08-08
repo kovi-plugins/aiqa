@@ -459,8 +459,10 @@ fn test_screenshot() -> Result<(), Box<dyn std::error::Error>> {
     let tab = browser.new_tab()?;
     tab.navigate_to("file:///home/thricecola/work/kovi-bot/plugins/aiqa/output.html")?;
 
+    tab.wait_for_element("article.markdown-body")?;
+
     let viewport = tab
-        .wait_for_element("article.markdown-body")?
+        .wait_for_element("body")?
         .get_box_model()?
         .margin_viewport();
 
