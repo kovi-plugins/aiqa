@@ -64,6 +64,9 @@ impl ScreenshotManager {
         ))
         .map_err(|err| ScreenshotError::InvalidFilePath(err.to_string()))?;
 
+        tab.wait_for_element("div.finish")
+            .map_err(|err| ScreenshotError::TabOperateErr(err.to_string()))?;
+
         tab.wait_for_element("article.markdown-body")
             .map_err(|err| ScreenshotError::TabOperateErr(err.to_string()))?;
 
@@ -246,14 +249,14 @@ async fn send_img(
     let res = match res {
         Ok(v) => v,
         Err(err) => {
-            e.reply_and_quote(format!("你的问题太难了，我不会Q-Q。\n\n{}", err));
+            e.reply_and_quote(format!("你的问题太难了，我不会Q.Q。\n\n{}", err));
             return;
         }
     };
 
     let html = match custom_css {
-        Some(v) => md_to_html(&res, Some(v.as_ref())),
-        None => md_to_html(&res, None),
+        Some(v) => md_to_html(&res, Some(v.as_ref()), &config),
+        None => md_to_html(&res, None, &config),
     };
 
     if !data_path.exists() {
@@ -270,7 +273,7 @@ async fn send_img(
         Ok(v) => v,
         Err(err) => {
             log::error!("{}", err);
-            e.reply_and_quote(format!("你的问题太难了，我不会Q-Q。\n\n{}", err));
+            e.reply_and_quote(format!("你的问题太难了，我不会Q.Q。\n\n{}", err));
             return;
         }
     };
@@ -376,14 +379,26 @@ fn image_to_base64(img: Vec<u8>) -> String {
     STANDARD.encode(&img)
 }
 
-fn md_to_html(md: &str, custom_css: Option<&str>) -> String {
+fn md_to_html(md: &str, custom_css: Option<&str>, config: &Config) -> String {
+    let time = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let logo_str = format!(
+        "\n---\n<div style=\"opacity: 0.6; font-size: 0.8em; font-style: italic;\">由 kovi-plugin-aiqa 于 {} 生成, 模型是 {}</div>",
+        time,
+        config
+            .model_name
+            .as_ref()
+            .map(|name| name.as_str())
+            .unwrap_or("不知道模型是什么")
+    );
+    let md = md.to_string() + &logo_str;
+
     let mut options = pulldown_cmark::Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
     options.insert(Options::ENABLE_TABLES);
     options.insert(Options::ENABLE_FOOTNOTES);
     options.insert(Options::ENABLE_MATH);
     options.insert(Options::ENABLE_GFM);
-    let parser = pulldown_cmark::Parser::new_ext(md, options);
+    let parser = pulldown_cmark::Parser::new_ext(&md, options);
 
     let mut html_output = String::new();
     html_output.push_str(html::HTML_START_NEXT_IS_MD_CSS);
@@ -453,51 +468,9 @@ async fn init_server_type(bot: &RuntimeBot) {
 #[test]
 #[ignore = "需要本地文件"]
 fn test_screenshot() -> Result<(), Box<dyn std::error::Error>> {
-    use headless_chrome::{Browser, LaunchOptions};
+    let mut sc = ScreenshotManager::init().unwrap();
 
-    let browser = Browser::new(LaunchOptions::default_builder().build()?)?;
-    let tab = browser.new_tab()?;
-    tab.navigate_to("file:///home/thricecola/work/kovi-bot/plugins/aiqa/output.html")?;
-
-    tab.wait_for_element("article.markdown-body")?;
-
-    let viewport = tab
-        .wait_for_element("body")?
-        .get_box_model()?
-        .margin_viewport();
-
-    tab.set_bounds(Bounds::Normal {
-        left: Some(0),
-        top: Some(0),
-        width: Some(viewport.width),
-        height: Some(viewport.height + 200.0),
-    })?;
-
-    // 设置设备像素比
-    tab.call_method(Emulation::SetDeviceMetricsOverride {
-        width: viewport.width as u32,
-        height: (viewport.height + 200.0) as u32,
-        device_scale_factor: 2.0,
-        mobile: false,
-        scale: None,
-        screen_width: None,
-        screen_height: None,
-        position_x: None,
-        position_y: None,
-        dont_set_visible_size: None,
-        screen_orientation: None,
-        viewport: None,
-        display_feature: None,
-        device_posture: None,
-    })
-    .map_err(|err| ScreenshotError::TabOperateErr(err.to_string()))?;
-
-    let png_data = tab.capture_screenshot(
-        Page::CaptureScreenshotFormatOption::Png,
-        None,
-        Some(viewport),
-        true,
-    )?;
+    let png_data = sc.screenshot("/home/thricecola/work/kovi-bot/plugins/aiqa/output.html")?;
 
     std::fs::write("screenshot.png", &png_data).unwrap();
 
@@ -597,18 +570,19 @@ Markdown 就像魔法咒语🪄，用简单的符号就能创造出漂亮的文�
 
     use std::path::PathBuf;
     let data_path = PathBuf::from(".");
-    // let config = Config {
-    //     apikey: None,
-    //     base_url: None,
-    //     model_name: None,
-    //     cmd: '%',
-    //     md_css_style: Some("air.css".to_string()),
-    // };
+    let config = Config {
+        apikey: None,
+        base_url: None,
+        model_name: None,
+        cmd: '%',
+        md_css_style: Some("air.css".to_string()),
+    };
 
     let data_path = data_path.join("ysj copy.css");
     let css = std::fs::read_to_string(data_path).unwrap();
 
-    let res = md_to_html(md, Some(css.as_str()));
+    let res = md_to_html(md, Some(css.as_str()), &config);
+    let _ = md_to_html(md, None, &config);
 
     std::fs::write("output.html", &res).unwrap();
 }

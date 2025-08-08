@@ -35,6 +35,55 @@ pub static HTML_4_NEXT_IS_HIGH_LIGHT_JS: &str = "</article><script>";
 
 pub static HTML_END: &str = r#"</script><script>hljs.highlightAll();</script>
 <script>
+const elementsToCheck = ['img']; // 需要检测的元素
+const timeoutMs = 5000; // 超时，比如 5 秒
+
+document.addEventListener("DOMContentLoaded", function() {
+    const markdownBody = document.querySelector('.markdown-body');
+
+    // 找出所有要等待加载的元素
+    const elements = [];
+    elementsToCheck.forEach(tag => {
+        elements.push(...markdownBody.querySelectorAll(tag));
+    });
+
+    // 创建等待加载完成的 Promise
+    const loadPromises = Array.from(elements).map(el => {
+        if (el.complete) {
+            // 图片已经加载完毕，立即resolve
+            return Promise.resolve();
+        } else {
+            // 等待图片 load 或 error
+            return new Promise(resolve => {
+                el.addEventListener('load', resolve, { once: true });
+                el.addEventListener('error', resolve, { once: true });
+            });
+        }
+    });
+
+    // 超时 Promise
+    const timeoutPromise = new Promise(resolve => {
+        setTimeout(resolve, timeoutMs);
+    });
+
+    // 等待所有图片加载完成或者超时，哪个先到就执行
+    Promise.race([
+        Promise.all(loadPromises),
+        timeoutPromise
+    ]).then(() => {
+        markdownBody.style.maxWidth = '720px';
+
+        const finishedElement = document.createElement('div');
+        finishedElement.classList.add('finish');
+        document.body.appendChild(finishedElement);
+    });
+});
+</script>
+</body></html>"#;
+
+#[allow(dead_code)]
+pub static HTML_END_FOR_CHANGE: &str = r#"</script><script>hljs.highlightAll();</script>
+<script>
 const elementsToCheck = ['pre', 'code']; // 需要检测的元素
 
 document.addEventListener("DOMContentLoaded", function() {
