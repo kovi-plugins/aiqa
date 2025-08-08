@@ -381,7 +381,7 @@ fn image_to_base64(img: Vec<u8>) -> String {
 fn md_to_html(md: &str, custom_css: Option<&str>, config: &Config) -> String {
     let time = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let logo_str = format!(
-        "\n---\n<div style=\"opacity: 0.6; font-size: 0.8em; font-style: italic; margin: 0; padding: 0; \"><p>由 kovi-plugin-aiqa 于 {} 生成, 模型是 {}</p></div>",
+        "\n\n---\n\n<div style=\"opacity: 0.6; font-size: 0.8em; font-style: italic; margin: 0; padding: 0; \"><p>由 kovi-plugin-aiqa 于 {} 生成, 模型是 {}</p></div>",
         time,
         config
             .model_name
@@ -577,7 +577,8 @@ Markdown 就像魔法咒语🪄，用简单的符号就能创造出漂亮的文�
     let data_path = data_path.join("ysj copy.css");
     let css = std::fs::read_to_string(data_path).unwrap();
 
-    // let md = "md";
+    let md = r#"
+markdown"#;
     let res = md_to_html(md, Some(css.as_str()), &config);
     let _ = md_to_html(md, None, &config);
 
