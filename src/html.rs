@@ -22,6 +22,7 @@ body{
     padding: 0;
     overflow: hidden;
     max-width: 720px;
+    display: inline-block;
 }
 </style>
 <style>
