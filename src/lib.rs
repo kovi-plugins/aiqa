@@ -166,6 +166,18 @@ async fn main() {
 
     init_server_type(&bot).await;
 
+    let custom_css = match config.md_css_style.as_ref() {
+        Some(style) => match std::fs::read_to_string(data_path.join(style)) {
+            Ok(css) => Some(Arc::new(css)),
+            Err(err) => {
+                log::error!("aiqa: Failed to load css: {}", err);
+                bot.send_private_msg(bot.get_main_admin().unwrap(), "aiqa: Failed to load css");
+                None
+            }
+        },
+        None => None,
+    };
+
     P::on_msg(move |e| {
         on_msg(
             e,
@@ -174,6 +186,7 @@ async fn main() {
             chat_client.clone(),
             data_path.clone(),
             config.clone(),
+            custom_css.clone(),
         )
     });
 
@@ -192,6 +205,7 @@ async fn on_msg(
     chat_client: Arc<req::ChatClient>,
     data_path: Arc<PathBuf>,
     config: Arc<Config>,
+    custom_css: Option<Arc<String>>,
 ) {
     let text = match e.borrow_text() {
         Some(v) => v,
@@ -204,7 +218,16 @@ async fn on_msg(
         send_emoji_msg(&e, &bot, false).await;
     } else if text.starts_with(config.cmd) {
         send_emoji_msg(&e, &bot, true).await;
-        send_img(&e, &bot, &screenshot, &chat_client, &data_path, &config).await;
+        send_img(
+            &e,
+            &bot,
+            &screenshot,
+            &chat_client,
+            &data_path,
+            &config,
+            custom_css.clone(),
+        )
+        .await;
         send_emoji_msg(&e, &bot, false).await;
     }
 }
@@ -216,6 +239,7 @@ async fn send_img(
     chat_client: &req::ChatClient,
     data_path: &PathBuf,
     config: &Config,
+    custom_css: Option<Arc<String>>,
 ) {
     let res = gpt_request(e, bot, chat_client, config).await;
 
@@ -227,7 +251,10 @@ async fn send_img(
         }
     };
 
-    let html = md_to_html(&res, data_path, config);
+    let html = match custom_css {
+        Some(v) => md_to_html(&res, Some(v.as_ref())),
+        None => md_to_html(&res, None),
+    };
 
     if !data_path.exists() {
         std::fs::create_dir_all(data_path).unwrap();
@@ -349,7 +376,7 @@ fn image_to_base64(img: Vec<u8>) -> String {
     STANDARD.encode(&img)
 }
 
-fn md_to_html(md: &str, data_path: &PathBuf, config: &Config) -> String {
+fn md_to_html(md: &str, custom_css: Option<&str>) -> String {
     let mut options = pulldown_cmark::Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
     options.insert(Options::ENABLE_TABLES);
@@ -367,28 +394,8 @@ fn md_to_html(md: &str, data_path: &PathBuf, config: &Config) -> String {
     }
     html_output.push_str(html::HTML_2_NEXT_IS_HIGHLIGHT_CSS);
 
-    // Check if custom CSS file exists
-    let use_custom_css = if let Some(css_filename) = &config.md_css_style {
-        let css_path = data_path.join(css_filename);
-        css_path.exists()
-    } else {
-        false
-    };
-
-    if use_custom_css {
-        // Use custom CSS
-        let css_filename = config.md_css_style.as_ref().unwrap();
-        let css_path = data_path.join(css_filename);
-        if let Ok(custom_css) = std::fs::read_to_string(&css_path) {
-            html_output.push_str(&custom_css);
-        } else {
-            // Fallback to default CSS if custom file can't be read
-            if *LIGHT.read() {
-                html_output.push_str(html::HIGH_LIGHT_LIGHT_CSS_NEXT_IS_HTML3);
-            } else {
-                html_output.push_str(html::HIGH_LIGHT_DARK_CSS_NEXT_IS_HTML3);
-            }
-        }
+    if let Some(custom_css) = custom_css {
+        html_output.push_str(custom_css);
     } else {
         // Use default CSS
         if *LIGHT.read() {
@@ -496,6 +503,7 @@ fn test_screenshot() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+#[ignore = "需要本地文件"]
 fn test_md_to_html() {
     let md = r#"# 你好呀!
 
@@ -519,14 +527,18 @@ But let's throw in a <b>tag</b>.
 
     use std::path::PathBuf;
     let data_path = PathBuf::from(".");
-    let config = Config {
-        apikey: None,
-        base_url: None,
-        model_name: None,
-        cmd: '%',
-        md_css_style: Some("air.css".to_string()),
-    };
-    let res = md_to_html(md, &data_path, &config);
+    // let config = Config {
+    //     apikey: None,
+    //     base_url: None,
+    //     model_name: None,
+    //     cmd: '%',
+    //     md_css_style: Some("air.css".to_string()),
+    // };
+
+    let data_path = data_path.join("air.css");
+    let css = std::fs::read_to_string(data_path).unwrap();
+
+    let res = md_to_html(md, Some(css.as_str()));
 
     std::fs::write("output.html", &res).unwrap();
 }
