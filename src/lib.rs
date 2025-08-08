@@ -2,22 +2,16 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use config::Config;
 use error::ScreenshotError;
-use headless_chrome::{
-    protocol::cdp::{Emulation, Page},
-    types::Bounds,
-    Browser,
-};
-use kovi::{
-    bot::message::Segment,
-    chrono::{self, Timelike as _},
-    log, Message, MsgEvent, PluginBuilder as P, RuntimeBot,
-};
+use headless_chrome::protocol::cdp::{Emulation, Page};
+use headless_chrome::types::Bounds;
+use headless_chrome::Browser;
+use kovi::bot::message::Segment;
+use kovi::chrono::{self, Timelike as _};
+use kovi::{log, Message, MsgEvent, PluginBuilder as P, RuntimeBot};
 use parking_lot::{Mutex, RwLock};
 use pulldown_cmark::Options;
-use std::{
-    path::{Path, PathBuf},
-    sync::{Arc, LazyLock, OnceLock},
-};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, LazyLock, OnceLock};
 
 mod config;
 mod error;
@@ -140,6 +134,7 @@ async fn main() {
         base_url: None,
         model_name: None,
         cmd: '%',
+        md_css_style: None,
     };
 
     let config: Arc<Config> =
@@ -232,7 +227,7 @@ async fn send_img(
         }
     };
 
-    let html = md_to_html(&res);
+    let html = md_to_html(&res, data_path, config);
 
     if !data_path.exists() {
         std::fs::create_dir_all(data_path).unwrap();
@@ -354,7 +349,7 @@ fn image_to_base64(img: Vec<u8>) -> String {
     STANDARD.encode(&img)
 }
 
-fn md_to_html(md: &str) -> String {
+fn md_to_html(md: &str, data_path: &PathBuf, config: &Config) -> String {
     let mut options = pulldown_cmark::Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
     options.insert(Options::ENABLE_TABLES);
@@ -371,11 +366,38 @@ fn md_to_html(md: &str) -> String {
         html_output.push_str(html::GITHUB_MARKDOWN_DARK_NEXT_IS_HTML2);
     }
     html_output.push_str(html::HTML_2_NEXT_IS_HIGHLIGHT_CSS);
-    if *LIGHT.read() {
-        html_output.push_str(html::HIGH_LIGHT_LIGHT_CSS_NEXT_IS_HTML3);
+
+    // Check if custom CSS file exists
+    let use_custom_css = if let Some(css_filename) = &config.md_css_style {
+        let css_path = data_path.join(css_filename);
+        css_path.exists()
     } else {
-        html_output.push_str(html::HIGH_LIGHT_DARK_CSS_NEXT_IS_HTML3);
+        false
+    };
+
+    if use_custom_css {
+        // Use custom CSS
+        let css_filename = config.md_css_style.as_ref().unwrap();
+        let css_path = data_path.join(css_filename);
+        if let Ok(custom_css) = std::fs::read_to_string(&css_path) {
+            html_output.push_str(&custom_css);
+        } else {
+            // Fallback to default CSS if custom file can't be read
+            if *LIGHT.read() {
+                html_output.push_str(html::HIGH_LIGHT_LIGHT_CSS_NEXT_IS_HTML3);
+            } else {
+                html_output.push_str(html::HIGH_LIGHT_DARK_CSS_NEXT_IS_HTML3);
+            }
+        }
+    } else {
+        // Use default CSS
+        if *LIGHT.read() {
+            html_output.push_str(html::HIGH_LIGHT_LIGHT_CSS_NEXT_IS_HTML3);
+        } else {
+            html_output.push_str(html::HIGH_LIGHT_DARK_CSS_NEXT_IS_HTML3);
+        }
     }
+
     html_output.push_str(html::HTML_3_NEXT_IS_MD_BODY_AND_THEN_IS_HTML4);
     pulldown_cmark::html::push_html(&mut html_output, parser);
     html_output.push_str(html::HTML_4_NEXT_IS_HIGH_LIGHT_JS);
@@ -428,7 +450,7 @@ fn test_screenshot() -> Result<(), Box<dyn std::error::Error>> {
 
     let browser = Browser::new(LaunchOptions::default_builder().build()?)?;
     let tab = browser.new_tab()?;
-    tab.navigate_to("file:///output.html")?;
+    tab.navigate_to("file:///home/thricecola/work/kovi-bot/plugins/aiqa/output.html")?;
 
     let viewport = tab
         .wait_for_element("article.markdown-body")?
@@ -495,7 +517,16 @@ But let's throw in a <b>tag</b>.
 已知过点$A(-1, 0)$ 、 $B(1, 0)$两点的动抛物线的准线始终与圆$x^2 + y^2 = 9$相切，该抛物线焦点$P$的轨迹是某圆锥曲线$E$的一部分。<br>(1)求曲线$E$的标准方程；<br>(2)已知点$C(-3, 0)$ ， $D(2, 0)$ ，过点$D$的动直线与曲线$E$相交于$M$ 、 $N$ ，设$\triangle CMN$的外心为$Q$ ， $O$为坐标原点，问：直线$OQ$与直线$MN$的斜率之积是否为定值，如果为定值，求出该定值；如果不是定值，则说明理由。
 "#;
 
-    let res = md_to_html(md);
+    use std::path::PathBuf;
+    let data_path = PathBuf::from(".");
+    let config = Config {
+        apikey: None,
+        base_url: None,
+        model_name: None,
+        cmd: '%',
+        md_css_style: Some("air.css".to_string()),
+    };
+    let res = md_to_html(md, &data_path, &config);
 
     std::fs::write("output.html", &res).unwrap();
 }
