@@ -13,6 +13,8 @@ use pulldown_cmark::Options;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, OnceLock};
 
+use crate::config::CssStyle;
+
 mod config;
 mod error;
 mod html;
@@ -166,17 +168,41 @@ async fn main() {
 
     init_server_type(&bot).await;
 
-    let custom_css = match config.md_css_style.as_ref() {
-        Some(style) => match std::fs::read_to_string(data_path.join(style)) {
-            Ok(css) => Some(Arc::new(css)),
+    let load_css_from_file = |path: Option<&Path>| -> Option<String> {
+        match std::fs::read_to_string(path?) {
+            Ok(css) => Some(css),
             Err(err) => {
                 log::error!("aiqa: Failed to load css: {}", err);
                 bot.send_private_msg(bot.get_main_admin().unwrap(), "aiqa: Failed to load css");
                 None
             }
-        },
-        None => None,
+        }
     };
+    let path_build = |p: Option<&String>| -> Option<PathBuf> { Some(data_path.join(p?)) };
+
+    let light_md_css_style_path = path_build(config.light_md_css_style.as_ref());
+    let dark_md_css_style_path = path_build(config.dark_md_css_style.as_ref());
+    let light_code_highlight_css_style_path =
+        path_build(config.light_code_highlight_css_style.as_ref());
+    let dark_code_highlight_css_style_path =
+        path_build(config.dark_code_highlight_css_style.as_ref());
+
+    let custom_css = Arc::new(CssStyle {
+        light_md_css_style: load_css_from_file(
+            light_md_css_style_path.as_ref().map(|v| v.as_path()),
+        ),
+        dark_md_css_style: load_css_from_file(dark_md_css_style_path.as_ref().map(|v| v.as_path())),
+        light_code_highlight_css_style: load_css_from_file(
+            light_code_highlight_css_style_path
+                .as_ref()
+                .map(|v| v.as_path()),
+        ),
+        dark_code_highlight_css_style: load_css_from_file(
+            dark_code_highlight_css_style_path
+                .as_ref()
+                .map(|v| v.as_path()),
+        ),
+    });
 
     P::on_msg(move |e| {
         on_msg(
@@ -205,7 +231,7 @@ async fn on_msg(
     chat_client: Arc<req::ChatClient>,
     data_path: Arc<PathBuf>,
     config: Arc<Config>,
-    custom_css: Option<Arc<String>>,
+    custom_css: Arc<CssStyle>,
 ) {
     let text = match e.borrow_text() {
         Some(v) => v,
@@ -239,7 +265,7 @@ async fn send_img(
     chat_client: &req::ChatClient,
     data_path: &PathBuf,
     config: &Config,
-    custom_css: Option<Arc<String>>,
+    custom_css: Arc<CssStyle>,
 ) {
     let res = gpt_request(e, bot, chat_client, config).await;
 
@@ -251,10 +277,7 @@ async fn send_img(
         }
     };
 
-    let html = match custom_css {
-        Some(v) => md_to_html(&res, Some(v.as_ref()), &config),
-        None => md_to_html(&res, None, &config),
-    };
+    let html = md_to_html(&res, custom_css.as_ref(), &config);
 
     if !data_path.exists() {
         std::fs::create_dir_all(data_path).unwrap();
@@ -378,7 +401,7 @@ fn image_to_base64(img: Vec<u8>) -> String {
     STANDARD.encode(&img)
 }
 
-fn md_to_html(md: &str, custom_css: Option<&str>, config: &Config) -> String {
+fn md_to_html(md: &str, custom_css: &CssStyle, config: &Config) -> String {
     let time = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let logo_str = format!(
         "\n\n---\n\n<div style=\"opacity: 0.6; font-size: 0.8em; font-style: italic; margin: 0; padding: 0; \"><p>由 kovi-plugin-aiqa 于 {} 生成, 模型是 {}</p></div>",
@@ -401,23 +424,36 @@ fn md_to_html(md: &str, custom_css: Option<&str>, config: &Config) -> String {
 
     let mut html_output = String::new();
     html_output.push_str(html::HTML_START_NEXT_IS_MD_CSS);
-    if let Some(custom_css) = custom_css {
-        html_output.push_str(custom_css);
+
+    let is_light = *LIGHT.read();
+
+    let markdown_css = if is_light {
+        custom_css
+            .light_md_css_style
+            .as_deref()
+            .unwrap_or(html::GITHUB_MARKDOWN_LIGHT_NEXT_IS_HTML2)
     } else {
-        if *LIGHT.read() {
-            html_output.push_str(html::GITHUB_MARKDOWN_LIGHT_NEXT_IS_HTML2);
-        } else {
-            html_output.push_str(html::GITHUB_MARKDOWN_DARK_NEXT_IS_HTML2);
-        }
-    }
+        custom_css
+            .dark_md_css_style
+            .as_deref()
+            .unwrap_or(html::GITHUB_MARKDOWN_DARK_NEXT_IS_HTML2)
+    };
+    html_output.push_str(markdown_css);
+
     html_output.push_str(html::HTML_2_NEXT_IS_HIGHLIGHT_CSS);
 
-    // Use default CSS
-    if *LIGHT.read() {
-        html_output.push_str(html::HIGH_LIGHT_LIGHT_CSS_NEXT_IS_HTML3);
+    let highlight_css = if is_light {
+        custom_css
+            .light_code_highlight_css_style
+            .as_deref()
+            .unwrap_or(html::HIGH_LIGHT_LIGHT_CSS_NEXT_IS_HTML3)
     } else {
-        html_output.push_str(html::HIGH_LIGHT_DARK_CSS_NEXT_IS_HTML3);
-    }
+        custom_css
+            .dark_code_highlight_css_style
+            .as_deref()
+            .unwrap_or(html::HIGH_LIGHT_DARK_CSS_NEXT_IS_HTML3)
+    };
+    html_output.push_str(highlight_css);
 
     html_output.push_str(html::HTML_3_NEXT_IS_MD_BODY_AND_THEN_IS_HTML4);
     pulldown_cmark::html::push_html(&mut html_output, parser);
@@ -577,10 +613,15 @@ Markdown 就像魔法咒语🪄，用简单的符号就能创造出漂亮的文�
     let data_path = data_path.join("ysj copy.css");
     let css = std::fs::read_to_string(data_path).unwrap();
 
-    let md = r#"
-markdown"#;
-    let res = md_to_html(md, Some(css.as_str()), &config);
-    let _ = md_to_html(md, None, &config);
+    let custom_css = CssStyle {
+        light_md_css_style: Some(css),
+        dark_md_css_style: None,
+        light_code_highlight_css_style: None,
+        dark_code_highlight_css_style: None,
+    };
+
+    // let md = r#"markdown"#;
+    let res = md_to_html(md, &custom_css, &config);
 
     std::fs::write("output.html", &res).unwrap();
 }
