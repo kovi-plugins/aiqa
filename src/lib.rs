@@ -159,12 +159,22 @@ async fn main() {
         return;
     }
 
+    if config.is_change_color {
+        //检测时间，如果是白天就LIGHT为true
+        let current_hour = chrono::Local::now().hour();
+        *LIGHT.write() = current_hour >= 6 && current_hour < 18;
+        P::cron("0 6,18 * * *", || cron()).unwrap();
+
+        async fn cron() {
+            let mut light = LIGHT.write();
+            *light = !*light;
+        }
+    } else {
+        *LIGHT.write() = true;
+    }
+
     let screenshot = Arc::new(Mutex::new(ScreenshotManager::init().unwrap()));
     let chat_client = Arc::new(req::ChatClient::new(&config));
-
-    //检测时间，如果是白天就LIGHT为true
-    let current_hour = chrono::Local::now().hour();
-    *LIGHT.write() = current_hour >= 6 && current_hour < 18;
 
     init_server_type(&bot).await;
 
@@ -180,10 +190,9 @@ async fn main() {
     };
     let path_build = |p: Option<&String>| -> Option<PathBuf> { Some(data_path.join(p?)) };
 
-    let light_md_css_style_path = path_build(config.light_md_css_style.as_ref());
+    let light_md_css_style_path = path_build(config.md_css_style.as_ref());
     let dark_md_css_style_path = path_build(config.dark_md_css_style.as_ref());
-    let light_code_highlight_css_style_path =
-        path_build(config.light_code_highlight_css_style.as_ref());
+    let light_code_highlight_css_style_path = path_build(config.code_highlight_css_style.as_ref());
     let dark_code_highlight_css_style_path =
         path_build(config.dark_code_highlight_css_style.as_ref());
 
@@ -215,13 +224,6 @@ async fn main() {
             custom_css.clone(),
         )
     });
-
-    P::cron("0 6,18 * * *", || cron()).unwrap();
-
-    async fn cron() {
-        let mut light = LIGHT.write();
-        *light = !*light;
-    }
 }
 
 async fn on_msg(

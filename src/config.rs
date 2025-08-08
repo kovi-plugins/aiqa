@@ -6,12 +6,19 @@ pub struct Config {
     pub(crate) base_url: Option<String>,
     pub(crate) model_name: Option<String>,
     pub(crate) cmd: char,
-    pub(crate) light_md_css_style: Option<String>,
+    #[serde(default = "default_is_change_color")]
+    pub(crate) is_change_color: bool,
+    pub(crate) md_css_style: Option<String>,
     pub(crate) dark_md_css_style: Option<String>,
-    pub(crate) light_code_highlight_css_style: Option<String>,
+    pub(crate) code_highlight_css_style: Option<String>,
     pub(crate) dark_code_highlight_css_style: Option<String>,
     pub(crate) prompt: String,
 }
+
+const fn default_is_change_color() -> bool {
+    true
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -19,10 +26,11 @@ impl Default for Config {
             base_url: Default::default(),
             model_name: Default::default(),
             cmd: Default::default(),
+            is_change_color: Default::default(),
 
-            light_md_css_style: Default::default(),
+            md_css_style: Default::default(),
             dark_md_css_style: Default::default(),
-            light_code_highlight_css_style: Default::default(),
+            code_highlight_css_style: Default::default(),
             dark_code_highlight_css_style: Default::default(),
 
             prompt: START_CHAT.to_string(),
