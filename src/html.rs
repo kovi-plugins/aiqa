@@ -12,12 +12,9 @@ pub static HTML_2_NEXT_IS_HIGHLIGHT_CSS: &str = r#"
     margin: 0;
     padding: 12px 12px 20px 12px;
     height: auto;
-
-    font-family: "MiSans", -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
 }
 
 body{
-    font-family: Arial, sans-serif; /* 选择无衬线字体 */
     margin: 0;
     padding: 0;
     overflow: hidden;

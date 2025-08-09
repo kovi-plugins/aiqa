@@ -513,7 +513,8 @@ async fn init_server_type(bot: &RuntimeBot) {
 fn test_screenshot() -> Result<(), Box<dyn std::error::Error>> {
     let mut sc = ScreenshotManager::init().unwrap();
 
-    let png_data = sc.screenshot("/home/thricecola/work/kovi-bot/plugins/aiqa/output.html")?;
+    let png_data =
+        sc.screenshot("/home/thricecola/work/kovi/kovi-bot/kovi-plugins/aiqa/output.html")?;
 
     std::fs::write("screenshot.png", &png_data).unwrap();
 
@@ -618,7 +619,7 @@ Markdown 就像魔法咒语🪄，用简单的符号就能创造出漂亮的文�
         ..Default::default()
     };
 
-    let data_path = data_path.join("ysj copy.css");
+    let data_path = data_path.join("ysj.css");
     let css = std::fs::read_to_string(data_path).unwrap();
 
     let custom_css = CssStyle {
