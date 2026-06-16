@@ -1,16 +1,22 @@
 [package]
 name = "kovi-plugin-aiqa"
-version = "0.1.1"
-edition = "2021"
+version = "0.2.0"
+edition = "2024"
+
+[features]
+default = ["milky"]
+napcat-onebot = ["kovi-onebot", "kovi-plugin-expand-napcat"]
+milky = ["kovi-milky"]
 
 [dependencies]
-headless_chrome = "1.0.15"
-kovi = ">=0.11"
-pulldown-cmark = "0.12.2"
+headless_chrome = "1"
+kovi = ">=0.13.0"
+pulldown-cmark = "0.13"
 thiserror = "2"
 parking_lot = "0.12"
 async-openai = "0.26.0"
 base64 = "0.22"
 serde = { version = "1", features = ["derive"] }
-kovi-plugin-expand-lagrange = "0.7"
-kovi-plugin-expand-napcat = "0.4"
+kovi-onebot = { version = ">=0.13", optional = true }
+kovi-milky = { version = ">=0.13", optional = true }
+kovi-plugin-expand-napcat = { version = "0.5", optional = true }

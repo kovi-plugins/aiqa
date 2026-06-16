@@ -1,134 +1,37 @@
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 use config::Config;
-use error::ScreenshotError;
-use headless_chrome::{
-    protocol::cdp::{Emulation, Page},
-    types::Bounds,
-    Browser,
-};
-use kovi::{
-    bot::message::Segment,
-    chrono::{self, Timelike as _},
-    log, Message, MsgEvent, PluginBuilder as P, RuntimeBot,
-};
+use kovi::chrono::{self, Timelike as _};
+use kovi::event::MessageEventTrait;
+use kovi::{Message, PluginBuilder as P, RuntimeBot, Segment as KoviSegment, log};
 use parking_lot::{Mutex, RwLock};
 use pulldown_cmark::Options;
-use std::{
-    path::{Path, PathBuf},
-    sync::{Arc, LazyLock, OnceLock},
-};
+use std::path::PathBuf;
+use std::sync::{Arc, LazyLock};
 
+#[cfg(not(any(feature = "napcat-onebot", feature = "milky")))]
+compile_error!("请至少启用一个协议 feature: \"napcat-onebot\" 或 \"milky\"");
+
+#[cfg(all(feature = "napcat-onebot", feature = "milky"))]
+compile_error!("不能同时启用 napcat-onebot 和 milky feature");
+
+#[cfg(feature = "napcat-onebot")]
+use kovi_onebot::*;
+
+#[cfg(feature = "milky")]
+use kovi_milky::*;
+
+#[cfg(any(feature = "napcat-onebot", feature = "milky"))]
+use crate::browser::ScreenshotManager;
+
+mod browser;
+#[cfg(any(feature = "napcat-onebot", feature = "milky"))]
 mod config;
 mod error;
 mod html;
 mod req;
 
 static LIGHT: LazyLock<RwLock<bool>> = LazyLock::new(|| RwLock::new(true));
-static SERVER_TYPE: OnceLock<ServerType> = OnceLock::new();
-
-enum ServerType {
-    NapCat,
-    Lagrange,
-}
-
-struct ScreenshotManager {
-    browser: Browser,
-}
-
-impl ScreenshotManager {
-    fn init() -> Result<Self, ScreenshotError> {
-        let browser =
-            Browser::default().map_err(|err| ScreenshotError::BrowserCreateErr(err.to_string()))?;
-
-        Ok(Self { browser })
-    }
-
-    pub fn screenshot<P: AsRef<Path>>(
-        &mut self,
-        full_file_path: P,
-    ) -> Result<Vec<u8>, ScreenshotError> {
-        let file_path = full_file_path.as_ref();
-
-        let tab = match self.browser.new_tab() {
-            Ok(tab) => tab,
-            Err(_) => {
-                self.restart_browser().map_err(|restart_err| {
-                    ScreenshotError::TabCreateErr(restart_err.to_string())
-                })?;
-                self.browser
-                    .new_tab()
-                    .map_err(|new_tab_err| ScreenshotError::TabCreateErr(new_tab_err.to_string()))?
-            }
-        };
-
-        tab.navigate_to(&format!(
-            "file://{}",
-            file_path
-                .to_str()
-                .ok_or(ScreenshotError::InvalidFilePath("".to_string()))?
-        ))
-        .map_err(|err| ScreenshotError::InvalidFilePath(err.to_string()))?;
-
-        tab.wait_for_element("div.finish")
-            .map_err(|err| ScreenshotError::TabOperateErr(err.to_string()))?;
-
-        let viewport = tab
-            .wait_for_element("article.markdown-body")
-            .map_err(|err| ScreenshotError::TabOperateErr(err.to_string()))?
-            .get_box_model()
-            .map_err(|err| ScreenshotError::TabOperateErr(err.to_string()))?
-            .margin_viewport();
-
-        // println!("111111111: {:?}", viewport);
-
-        tab.set_bounds(Bounds::Normal {
-            left: Some(0),
-            top: Some(0),
-            width: Some(viewport.width),
-            height: Some(viewport.height + 200.0),
-        })
-        .map_err(|err| ScreenshotError::TabOperateErr(err.to_string()))?;
-
-        // 设置设备像素比
-        tab.call_method(Emulation::SetDeviceMetricsOverride {
-            width: viewport.width as u32,
-            height: (viewport.height + 200.0) as u32,
-            device_scale_factor: 2.0,
-            mobile: false,
-            scale: None,
-            screen_width: None,
-            screen_height: None,
-            position_x: None,
-            position_y: None,
-            dont_set_visible_size: None,
-            screen_orientation: None,
-            viewport: None,
-            display_feature: None,
-            device_posture: None,
-        })
-        .map_err(|err| ScreenshotError::TabOperateErr(err.to_string()))?;
-
-        let png_data = tab
-            .capture_screenshot(
-                Page::CaptureScreenshotFormatOption::Png,
-                None,
-                Some(viewport),
-                true,
-            )
-            .map_err(|err| ScreenshotError::ScreenshotCreateErr(err.to_string()))?;
-
-        Ok(png_data)
-    }
-
-    fn restart_browser(&mut self) -> Result<(), ScreenshotError> {
-        let browser =
-            Browser::default().map_err(|err| ScreenshotError::BrowserCreateErr(err.to_string()))?;
-        self.browser = browser;
-
-        Ok(())
-    }
-}
 
 #[kovi::plugin]
 async fn main() {
@@ -142,22 +45,33 @@ async fn main() {
         cmd: '%',
     };
 
-    let config: Arc<Config> =
-        match kovi::utils::load_json_data(default_config.clone(), data_path.join("config.json")) {
-            Ok(config) => Arc::new(config),
+    let (config, send_err_msg) = {
+        let fallback = default_config.clone();
+        match kovi::utils::load_json_data(default_config, data_path.join("config.json")) {
+            Ok(config) => (Arc::new(config), None),
             Err(err) => {
                 log::error!("aiqa: Failed to load config: {}", err);
-                bot.send_private_msg(bot.get_main_admin().unwrap(), "aiqa: Failed to load config");
-                Arc::new(default_config)
+                (Arc::new(fallback), Some("aiqa: Failed to load config"))
             }
-        };
+        }
+    };
+    if let Some(msg) = send_err_msg {
+        send_private_msg(
+            &bot,
+            bot.get_main_admin().unwrap().try_as_i64_or_panic(),
+            msg,
+        )
+        .await;
+    }
 
     if config.apikey.is_none() || config.base_url.is_none() || config.model_name.is_none() {
         log::error!("aiqa is not set");
-        bot.send_private_msg(
-            bot.get_main_admin().unwrap(),
+        send_private_msg(
+            &bot,
+            bot.get_main_admin().unwrap().try_as_i64().unwrap(),
             "aiqa 还没有配置，请在data文件夹里配置config.json，并重载此插件",
-        );
+        )
+        .await;
 
         return;
     }
@@ -168,8 +82,6 @@ async fn main() {
     //检测时间，如果是白天就LIGHT为true
     let current_hour = chrono::Local::now().hour();
     *LIGHT.write() = current_hour >= 6 && current_hour < 18;
-
-    init_server_type(&bot).await;
 
     P::on_msg(move |e| {
         on_msg(
@@ -190,6 +102,7 @@ async fn main() {
     }
 }
 
+#[cfg(any(feature = "napcat-onebot", feature = "milky"))]
 async fn on_msg(
     e: Arc<MsgEvent>,
     bot: Arc<RuntimeBot>,
@@ -214,6 +127,7 @@ async fn on_msg(
     }
 }
 
+#[cfg(any(feature = "napcat-onebot", feature = "milky"))]
 async fn send_img(
     e: &MsgEvent,
     bot: &RuntimeBot,
@@ -260,43 +174,38 @@ async fn send_img(
     e.reply_and_quote(msg);
 }
 
-async fn send_emoji_msg(e: &MsgEvent, bot: &RuntimeBot, is_add: bool) {
-    let server_type = match SERVER_TYPE.get() {
-        Some(v) => v,
-        None => {
-            return;
-        }
-    };
-
-    match server_type {
-        ServerType::NapCat => {
-            let _ = kovi_plugin_expand_napcat::NapCatApi::set_msg_emoji_like(
-                bot,
-                e.message_id.into(),
-                "424",
-            )
+#[cfg(feature = "napcat-onebot")]
+async fn send_emoji_msg(e: &MsgEvent, bot: &RuntimeBot, _is_add: bool) {
+    let _ =
+        kovi_plugin_expand_napcat::NapCatApi::set_msg_emoji_like(bot, e.message_id.into(), "424")
             .await;
-        }
-        ServerType::Lagrange => {
-            let group_id = match e.group_id {
-                Some(id) => id,
-                None => {
-                    return;
-                }
-            };
-
-            let _ = kovi_plugin_expand_lagrange::LagrangeApi::set_group_reaction(
-                bot,
-                group_id,
-                e.message_id.into(),
-                "424",
-                is_add,
-            )
-            .await;
-        }
-    }
 }
 
+#[cfg(feature = "milky")]
+async fn send_emoji_msg(e: &MsgEvent, bot: &RuntimeBot, is_add: bool) {
+    use kovi_milky::MilkyGroupApi;
+
+    let group_id = match e.data.group.as_ref() {
+        Some(group) => group.group_id,
+        None => return,
+    };
+
+    bot.send_group_message_reaction(group_id, e.data.message_seq, "424", "face", is_add);
+}
+
+#[cfg(feature = "napcat-onebot")]
+async fn send_private_msg(bot: &RuntimeBot, user_id: i64, text: &str) {
+    bot.send_private_msg(user_id, text);
+}
+
+#[cfg(feature = "milky")]
+async fn send_private_msg(bot: &RuntimeBot, user_id: i64, text: &str) {
+    use kovi_milky::MilkyMessageApi;
+    let msg = Message::new().add_text(text);
+    let _ = bot.send_private_message(user_id, msg).await;
+}
+
+#[cfg(any(feature = "napcat-onebot", feature = "milky"))]
 async fn send_text(e: &MsgEvent, bot: &RuntimeBot, chat_client: &req::ChatClient, config: &Config) {
     let res = gpt_request(e, bot, chat_client, config).await;
 
@@ -310,6 +219,7 @@ async fn send_text(e: &MsgEvent, bot: &RuntimeBot, chat_client: &req::ChatClient
     };
 }
 
+#[cfg(any(feature = "napcat-onebot", feature = "milky"))]
 async fn gpt_request(
     e: &MsgEvent,
     bot: &RuntimeBot,
@@ -318,7 +228,7 @@ async fn gpt_request(
 ) -> Result<String, Box<dyn std::error::Error>> {
     let text = e.borrow_text().unwrap();
 
-    let quote = get_guote_text(bot, e.message.get("reply")).await;
+    let quote = get_guote_text(bot, e, e.get_message().get("reply")).await;
 
     let text = text.trim_matches(config.cmd).trim();
 
@@ -335,13 +245,39 @@ async fn gpt_request(
     res.content.ok_or("no content".into())
 }
 
-async fn get_guote_text(bot: &RuntimeBot, quote: Vec<Segment>) -> Option<String> {
+#[cfg(feature = "napcat-onebot")]
+async fn get_guote_text(
+    bot: &RuntimeBot,
+    _e: &MsgEvent,
+    quote: Vec<KoviSegment>,
+) -> Option<String> {
     if quote.is_empty() {
         return None;
     }
     let quote = &quote[0];
     let id = quote.data.get("id")?.as_str()?;
     let mut quote_msg = bot.get_msg(id.parse().ok()?).await.ok()?;
+    let msg_json = quote_msg.data.get_mut("message")?.take();
+    let msg = kovi::Message::from_value(msg_json).ok()?;
+
+    let text = msg.to_human_string();
+
+    Some(text)
+}
+
+#[cfg(feature = "milky")]
+async fn get_guote_text(bot: &RuntimeBot, e: &MsgEvent, quote: Vec<KoviSegment>) -> Option<String> {
+    use kovi_milky::MilkyMessageApi;
+
+    if quote.is_empty() {
+        return None;
+    }
+    let quote = &quote[0];
+    let message_seq: i64 = quote.data.get("message_seq")?.as_i64()?;
+
+    let group_id = e.data.group.as_ref()?.group_id;
+
+    let mut quote_msg = bot.get_message("group", group_id, message_seq).await.ok()?;
     let msg_json = quote_msg.data.get_mut("message")?.take();
     let msg = kovi::Message::from_value(msg_json).ok()?;
 
@@ -385,42 +321,6 @@ fn md_to_html(md: &str) -> String {
     html_output
 }
 
-// 识别服务端
-async fn init_server_type(bot: &RuntimeBot) {
-    #[derive(Debug, serde::Deserialize, serde::Serialize)]
-    struct OnebotInfo {
-        app_name: Option<String>,
-        app_version: Option<String>,
-    }
-
-    let onebot_info: Option<OnebotInfo> = match bot.get_version_info().await {
-        Ok(v) => match kovi::serde_json::from_value::<OnebotInfo>(v.data) {
-            Ok(v) => Some(v),
-            Err(_) => None,
-        },
-        Err(_) => None,
-    };
-
-    let name = match onebot_info {
-        Some(info) => match info.app_name {
-            Some(app_name) => app_name,
-            None => "".to_string(),
-        },
-        None => "".to_string(),
-    };
-
-    let name = name.to_lowercase();
-
-    #[allow(unused_must_use)]
-    if name.contains("napcat") {
-        log::info!("Detected server type: NapCat");
-        SERVER_TYPE.set(ServerType::NapCat);
-    } else if name.contains("lagrange") {
-        log::info!("Detected server type: Lagrange");
-        SERVER_TYPE.set(ServerType::Lagrange);
-    }
-}
-
 #[test]
 #[ignore = "需要本地文件"]
 fn test_screenshot() -> Result<(), Box<dyn std::error::Error>> {
@@ -435,7 +335,7 @@ fn test_screenshot() -> Result<(), Box<dyn std::error::Error>> {
         .get_box_model()?
         .margin_viewport();
 
-    tab.set_bounds(Bounds::Normal {
+    tab.set_bounds(headless_chrome::types::Bounds::Normal {
         left: Some(0),
         top: Some(0),
         width: Some(viewport.width),
@@ -443,26 +343,28 @@ fn test_screenshot() -> Result<(), Box<dyn std::error::Error>> {
     })?;
 
     // 设置设备像素比
-    tab.call_method(Emulation::SetDeviceMetricsOverride {
-        width: viewport.width as u32,
-        height: (viewport.height + 200.0) as u32,
-        device_scale_factor: 2.0,
-        mobile: false,
-        scale: None,
-        screen_width: None,
-        screen_height: None,
-        position_x: None,
-        position_y: None,
-        dont_set_visible_size: None,
-        screen_orientation: None,
-        viewport: None,
-        display_feature: None,
-        device_posture: None,
-    })
-    .map_err(|err| ScreenshotError::TabOperateErr(err.to_string()))?;
+    tab.call_method(
+        headless_chrome::protocol::cdp::Emulation::SetDeviceMetricsOverride {
+            width: viewport.width as u32,
+            height: (viewport.height + 200.0) as u32,
+            device_scale_factor: 2.0,
+            mobile: false,
+            scale: None,
+            screen_width: None,
+            screen_height: None,
+            position_x: None,
+            position_y: None,
+            dont_set_visible_size: None,
+            screen_orientation: None,
+            viewport: None,
+            display_feature: None,
+            device_posture: None,
+        },
+    )
+    .map_err(|err| err.to_string())?;
 
     let png_data = tab.capture_screenshot(
-        Page::CaptureScreenshotFormatOption::Png,
+        headless_chrome::protocol::cdp::Page::CaptureScreenshotFormatOption::Png,
         None,
         Some(viewport),
         true,

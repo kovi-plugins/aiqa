@@ -1,13 +1,11 @@
 use crate::*;
-use async_openai::{
-    config::OpenAIConfig,
-    types::{
-        ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestSystemMessageArgs,
-        ChatCompletionRequestUserMessageArgs, ChatCompletionResponseMessage,
-        CreateChatCompletionRequestArgs, ResponseFormat,
-    },
-    Client,
+use async_openai::config::OpenAIConfig;
+use async_openai::types::{
+    ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestSystemMessageArgs,
+    ChatCompletionRequestUserMessageArgs, ChatCompletionResponseMessage,
+    CreateChatCompletionRequestArgs, ResponseFormat,
 };
+use async_openai::Client;
 use config::START_CHAT;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
