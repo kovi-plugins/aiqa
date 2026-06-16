@@ -4,7 +4,7 @@ version = "0.2.0"
 edition = "2024"
 
 [features]
-default = ["milky"]
+default = []
 napcat-onebot = ["kovi-onebot", "kovi-plugin-expand-napcat"]
 milky = ["kovi-milky"]
 
